@@ -1,7 +1,7 @@
 name: Smoke test
 on:
   schedule:
-    - cron: '0 * * * *'  # Runs at the start of every hour
+    - cron: '*/5 * * * *'  # Runs every 5 minutes
   workflow_dispatch:
     inputs:
       test_url:
@@ -9,20 +9,33 @@ on:
         required: false
         default: 'https://casa.pellegriniluca.com'
 
-jobs:  
+jobs:
   smoke-test:
     runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+    # Set defaults at job level; these can be overridden when the workflow is dispatched
+    env:
+      URL: ${{ github.event.inputs.test_url || 'https://casa.pellegriniluca.com' }}
+      SLACK_WEBHOOK_URL: ''
 
-    - uses: browser-actions/setup-chrome@v1
-    - run: chrome --version
-        
-    - name: Run the test
-      run: |
-        export URL="${{ github.event.inputs.test_url || 'https://casa.pellegriniluca.com' }}"
-        export SLACK_WEBHOOK_URL=""
-        sudo apt install python3-pip -y && sudo pip3 install --upgrade pip
-        echo "📜 Console logs:" >> $GITHUB_STEP_SUMMARY
-        python3 smoke_test.py >> $GITHUB_STEP_SUMMARY
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # No browser required for requests-based smoke test
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install dependencies (if present)
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      # Playwright/browser install not required for requests-based check
+
+      - name: Run smoke test and append output to step summary
+        run: |
+          echo "📜 Console logs:" >> $GITHUB_STEP_SUMMARY
+          python smoke_test.py >> $GITHUB_STEP_SUMMARY
