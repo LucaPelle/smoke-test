@@ -7,7 +7,7 @@ on:
       test_url:
         description: 'URL for smoke test'
         required: false
-        default: 'https://index.hu'
+        default: 'https://https://casa.pellegriniluca.com'
 
 jobs:  
   smoke-test:
@@ -21,7 +21,7 @@ jobs:
         
     - name: Run the test
       run: |
-        export URL="${{ github.event.inputs.test_url || 'https://index.hu' }}"
+        export URL="${{ github.event.inputs.test_url || 'https://casa.pellegriniluca.com' }}"
         export SLACK_WEBHOOK_URL=""
         sudo apt install python3-pip -y && sudo pip3 install --upgrade pip && sudo pip3 install selenium
         echo "📜 Console logs:" >> $GITHUB_STEP_SUMMARY
