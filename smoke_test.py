@@ -1,68 +1,95 @@
 import os
 import sys
 import time
-import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+import json
+import urllib.request
+import urllib.error
+
+try:
+    from playwright.sync_api import sync_playwright
+except Exception:
+    sync_playwright = None
 
 def send_slack_notification(webhook_url, message):
     if not webhook_url:
         print("Slack webhook not configured; skipping Slack notification.")
         return
-
     payload = {"text": message}
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(webhook_url, data=data, headers={"Content-Type": "application/json"})
     try:
-        response = requests.post(webhook_url, json=payload)
-        response.raise_for_status()
-    except requests.exceptions.RequestException as e:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.getcode() >= 400:
+                print(f"Error sending Slack notification: HTTP {resp.getcode()}")
+    except urllib.error.URLError as e:
         print(f"Error sending Slack notification: {e}")
 
 def check_console_errors(url, webhook_url):
-    # Use requests to perform a simple HTTP smoke-check (no JS execution).
-    # Note: requests cannot capture browser console logs or take screenshots.
-    session = requests.Session()
-    retries = Retry(total=2, backoff_factor=0.5, status_forcelist=(429, 500, 502, 503, 504))
-    session.mount("https://", HTTPAdapter(max_retries=retries))
-    session.mount("http://", HTTPAdapter(max_retries=retries))
+    # Use Playwright-only to perform the smoke check (execute JS, bypass Cloudflare challenges)
+    if sync_playwright is None:
+        print("Playwright is not available. Please install dependencies and the browser binaries:\n  python -m pip install -r requirements.txt\n  python -m playwright install")
+        sys.exit(1)
 
     start_time = time.time()
-    # Use a browser-like User-Agent to reduce chance of simple bot-blocking
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
     try:
-        resp = session.get(url, headers=headers, timeout=30)
-        load_time = time.time() - start_time
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                                                    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))
+            page = context.new_page()
+            response = page.goto(url, timeout=45000)
+            # wait for load to stabilize
+            try:
+                page.wait_for_load_state("load", timeout=30000)
+            except Exception:
+                pass
 
-        status = resp.status_code
-        print(f"HTTP {status} returned for {url} (time: {load_time:.2f}s)")
+            load_time = time.time() - start_time
+            status = response.status if response else None
+            print(f"HTTP {status} returned for {url} (time: {load_time:.2f}s)")
 
-        if status >= 400:
-            error_message = f"❌ Smoke test failed: HTTP {status} for {url}."
-            # Print some diagnostic information to help debug 403/blocks
-            print("--- Response headers ---")
-            for k, v in resp.headers.items():
-                print(f"{k}: {v}")
-            print("--- Response body (truncated) ---")
-            body = resp.text or ""
-            print(body[:1000])
+            if status is None:
+                print("No HTTP response object returned by Playwright; treating as failure.")
+                if webhook_url:
+                    send_slack_notification(webhook_url, f"❌ Smoke test failed: no response for {url} via Playwright.")
+                sys.exit(1)
 
-            if webhook_url:
-                send_slack_notification(webhook_url, error_message)
+            if status >= 400:
+                print("--- Response headers ---")
+                try:
+                    headers = response.headers
+                    for k, v in headers.items():
+                        print(f"{k}: {v}")
+                except Exception:
+                    pass
+                try:
+                    body = page.content() or ""
+                    print("--- Response body (truncated) ---")
+                    print(body[:1000])
+                except Exception:
+                    pass
+
+                if webhook_url:
+                    send_slack_notification(webhook_url, f"❌ Smoke test failed: HTTP {status} for {url} via Playwright.")
+                else:
+                    print("Slack webhook not configured; not sending failure notification.")
+                context.close()
+                browser.close()
+                sys.exit(1)
             else:
-                print("Slack webhook not configured; not sending failure notification.")
-            sys.exit(1)
-        else:
-            load_message = f"Page responded with {status} in {load_time:.2f} seconds."
-            print("✅ Smoke check passed.")
-            print(f"⏲️ {load_message}")
-            if webhook_url:
-                send_slack_notification(webhook_url, load_message)
+                load_message = f"Page responded with {status} in {load_time:.2f} seconds (Playwright)."
+                print("✅ Smoke check passed.")
+                print(f"⏲️ {load_message}")
+                if webhook_url:
+                    send_slack_notification(webhook_url, load_message)
 
-    except requests.exceptions.RequestException as e:
-        print(f"Error while requesting {url}: {e}")
+            context.close()
+            browser.close()
+
+    except Exception as e:
+        print(f"Playwright error while requesting {url}: {e}")
         if webhook_url:
-            send_slack_notification(webhook_url, f"❌ Error while requesting {url}: {e}")
+            send_slack_notification(webhook_url, f"❌ Playwright error while requesting {url}: {e}")
         else:
             print("Slack webhook not configured; not sending error notification.")
         sys.exit(1)

@@ -34,6 +34,17 @@ jobs:
           python -m pip install --upgrade pip setuptools wheel
           if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
 
+      - name: Install Playwright browsers (if Playwright is installed)
+        run: |
+          python - <<'PY'
+          import importlib, subprocess, sys
+          if importlib.util.find_spec('playwright'):
+              print('Playwright package found; installing browsers')
+              subprocess.check_call([sys.executable, '-m', 'playwright', 'install'])
+          else:
+              print('Playwright not installed; skipping browser install')
+          PY
+
       - name: Run smoke test and append output to step summary
         run: |
           echo "📜 Console logs:" >> $GITHUB_STEP_SUMMARY
