@@ -26,8 +26,12 @@ def check_console_errors(url, webhook_url):
     session.mount("http://", HTTPAdapter(max_retries=retries))
 
     start_time = time.time()
+    # Use a browser-like User-Agent to reduce chance of simple bot-blocking
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     try:
-        resp = session.get(url, timeout=30)
+        resp = session.get(url, headers=headers, timeout=30)
         load_time = time.time() - start_time
 
         status = resp.status_code
@@ -35,6 +39,14 @@ def check_console_errors(url, webhook_url):
 
         if status >= 400:
             error_message = f"❌ Smoke test failed: HTTP {status} for {url}."
+            # Print some diagnostic information to help debug 403/blocks
+            print("--- Response headers ---")
+            for k, v in resp.headers.items():
+                print(f"{k}: {v}")
+            print("--- Response body (truncated) ---")
+            body = resp.text or ""
+            print(body[:1000])
+
             if webhook_url:
                 send_slack_notification(webhook_url, error_message)
             else:
