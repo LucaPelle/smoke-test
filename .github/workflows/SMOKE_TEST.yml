@@ -30,10 +30,9 @@ jobs:
 
       - name: Install dependencies (if present)
         run: |
-          python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-
-      # Playwright/browser install not required for requests-based check
+          # Use the Python-provided pip to avoid touching the system-installed pip
+          python -m pip install --upgrade pip setuptools wheel
+          if [ -f requirements.txt ]; then python -m pip install -r requirements.txt; fi
 
       - name: Run smoke test and append output to step summary
         run: |
