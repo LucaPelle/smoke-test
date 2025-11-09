@@ -23,6 +23,6 @@ jobs:
       run: |
         export URL="${{ github.event.inputs.test_url || 'https://casa.pellegriniluca.com' }}"
         export SLACK_WEBHOOK_URL=""
-        sudo apt install python3-pip -y && sudo pip3 install --upgrade pip && sudo pip3 install selenium
+        sudo apt install python3-pip -y && sudo pip3 install --upgrade pip
         echo "📜 Console logs:" >> $GITHUB_STEP_SUMMARY
         python3 smoke_test.py >> $GITHUB_STEP_SUMMARY
