@@ -7,7 +7,7 @@ on:
       test_url:
         description: 'URL for smoke test'
         required: false
-        default: 'https://https://casa.pellegriniluca.com'
+        default: 'https://casa.pellegriniluca.com'
 
 jobs:  
   smoke-test:
