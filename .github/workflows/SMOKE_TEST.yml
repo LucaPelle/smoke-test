@@ -37,11 +37,12 @@ jobs:
       - name: Install Playwright browsers (if Playwright is installed)
         run: |
           python - <<'PY'
-          import importlib, subprocess, sys
-          if importlib.util.find_spec('playwright'):
+          import subprocess, sys
+          try:
+              import playwright
               print('Playwright package found; installing browsers')
               subprocess.check_call([sys.executable, '-m', 'playwright', 'install'])
-          else:
+          except Exception:
               print('Playwright not installed; skipping browser install')
           PY
 
