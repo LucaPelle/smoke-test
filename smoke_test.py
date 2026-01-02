@@ -25,7 +25,6 @@ def send_slack_notification(webhook_url, message):
     except Exception as e:
         print(f"Error sending Slack notification: {e}")
 
-
 def run_smoke_check(url, webhook_url=None):
     """Navigate to URL with Playwright, report status, and optionally notify Slack."""
     if sync_playwright is None:
